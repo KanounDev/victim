@@ -1,66 +1,84 @@
 # victim-app
 
-Deliberately vulnerable Node.js service used for CSPM and container security demonstrations.
+This repository is a deliberately unsafe Node.js demo application for a controlled DevSecOps security showcase.
+It is designed to help demonstrate how KubeSentinel flags insecure infrastructure and how runtime monitoring with Falco can surface suspicious activity.
 
 ## Demo architecture
 
 ![KubeSentinel demo architecture](kubesentinel_demo_architecture.svg)
 
-The diagram shows the intended flow from code push and manifest scanning through deployment, runtime monitoring, and event collection.
+The diagram summarizes the intended flow: code is pushed, manifests are scanned, the image is built and deployed, and runtime events are collected for analysis.
 
-## What it does
+## Demo purpose
 
-The app exposes a small Express API with a health check plus two intentionally unsafe endpoints:
+This project exists to support a security demonstration, not production use. The app and infrastructure are intentionally misconfigured so that CSPM and runtime detection tools have something meaningful to detect.
 
-- `GET /api/health` returns a basic status payload.
-- `GET /api/ping?target=...` shells out to `ping` without sanitizing input.
-- `GET /api/read?file=...` reads a file path directly from the request.
+The demo covers:
 
-These weaknesses are intentional for training and testing purposes. Do not expose this app to untrusted networks.
+- Static scanning of Kubernetes manifests
+- Detection of risky container settings
+- Runtime event visibility from the application and cluster
+- Event aggregation and analysis in the KubeSentinel namespace
 
-## Prerequisites
+## Application overview
+
+The service is a small Express API with a health check and two intentionally unsafe request handlers.
+
+- `GET /api/health` returns a simple 200 response.
+- `GET /api/ping` accepts a `target` query parameter and forwards it into a shell command.
+- `GET /api/read` accepts a `file` query parameter and reads the requested path directly.
+
+These behaviors are intentional for the demo and should only be used in an isolated lab environment.
+
+## Local development
+
+Requirements:
 
 - Node.js 18 or newer
 - npm
 
-## Local development
+Run the app locally:
 
 ```bash
 npm install
 npm start
 ```
 
-The service listens on port `3000`.
+The server listens on port `3000`.
 
-Example requests:
+## Container image
 
-```bash
-curl http://localhost:3000/api/health
-curl "http://localhost:3000/api/ping?target=8.8.8.8"
-curl "http://localhost:3000/api/read?file=README.md"
-```
+The Dockerfile builds from the full `node:18` image and runs the process as the default root user so the demo can surface container hardening findings.
 
-## Docker
-
-Build and run the image locally:
+Build and run:
 
 ```bash
 docker build -t victim-app .
 docker run --rm -p 3000:3000 victim-app
 ```
 
-## Kubernetes
+## Kubernetes deployment
 
-The Kubernetes manifests are in [k8s/deployment.yaml](k8s/deployment.yaml).
+The manifest in [k8s/deployment.yaml](k8s/deployment.yaml) includes intentionally unsafe pod settings and a hostPath mount to ensure the scanner has clear violations to report.
 
-Apply them with:
+Apply it with:
 
 ```bash
 kubectl apply -f k8s/deployment.yaml
 ```
 
-The service is exposed as a `NodePort` on port `80` inside the cluster and forwards to container port `3000`.
+## CI/CD flow
 
-## CI/CD
+The GitHub Actions workflow in [.github/workflows/deploy.yml](.github/workflows/deploy.yml) represents the demo pipeline:
 
-The GitHub Actions workflow in [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs a static scan before deploying the Kubernetes manifest.
+1. Push code to the main branch.
+2. Run a KubeSentinel static scan against the manifests.
+3. Deploy to Minikube only if the scan passes.
+
+## Repo layout
+
+- [server.js](server.js)
+- [Dockerfile](Dockerfile)
+- [k8s/deployment.yaml](k8s/deployment.yaml)
+- [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
+- [kubesentinel_demo_architecture.svg](kubesentinel_demo_architecture.svg)
