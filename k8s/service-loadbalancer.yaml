@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: victim-app-lb
+  namespace: demo-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: victim-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
