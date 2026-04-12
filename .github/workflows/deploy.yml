@@ -1,0 +1,24 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  scan-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run KubeSentinel Static Scan
+        run: kubesentinel scan --path ./k8s
+
+      - name: Deploy to Minikube
+        run: |
+          echo "Scan passed — deploying to Minikube..."
+          kubectl apply -f ./k8s/deployment.yaml
