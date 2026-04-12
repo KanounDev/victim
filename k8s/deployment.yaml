@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victim-app
+  labels:
+    app: victim-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victim-app
+  template:
+    metadata:
+      labels:
+        app: victim-app
+    spec:
+      # Intentional misconfiguration: run all containers as root
+      securityContext:
+        runAsUser: 0
+      volumes:
+        # Intentional misconfiguration: mount host root filesystem into container
+        - name: host-root
+          hostPath:
+            path: /
+      containers:
+        - name: victim-app
+          image: victim-app:latest
+          ports:
+            - containerPort: 3000
+          securityContext:
+            # Intentional misconfigurations for CSPM demonstration
+            privileged: true
+            allowPrivilegeEscalation: true
+            readOnlyRootFilesystem: false
+            runAsUser: 0
+          volumeMounts:
+            - name: host-root
+              mountPath: /host-root
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: victim-app
+spec:
+  selector:
+    app: victim-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: NodePort
