@@ -50,8 +50,12 @@ jobs:
           # 1. Copy the rules from the kubesentinel repo to the pipeline's workspace
           cp -r /home/test/kubesentinel/config ./
           
-          # 2. Run the scan (it will now see the ./config/rules folder)
-          kubesentinel scan --path ./k8s/
+          # 2. Run the scan and capture output (it will now see the ./config/rules folder)
+          if ! kubesentinel scan --path ./k8s/; then
+            echo "❌ KubeSentinel scan failed with violations detected!"
+            exit 1
+          fi
+          echo "✓ KubeSentinel scan passed - no violations found"
         shell: bash
 
       - name: Ensure demo-app namespace exists
