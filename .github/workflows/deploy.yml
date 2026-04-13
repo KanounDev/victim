@@ -279,36 +279,48 @@ jobs:
       - name: Display Access Instructions
         if: success()
         run: |
+          # Capture real VM values
+          VM_IP=$(hostname -I | awk '{print $1}')
+          VM_HOSTNAME=$(hostname)
+          FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco,app.kubernetes.io/instance=falco -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "falco-pod")
+          EXTERNAL_IP=$(kubectl get svc -n ${{ env.NAMESPACE }} victim-app-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "PENDING")
+
           echo ""
           echo "============================================================"
-          echo "      KubeSentinel Demo Setup Complete"
+          echo "      KubeSentinel Demo Setup Complete ✓"
           echo "============================================================"
           echo ""
-          echo "Stack Components:"
+          echo "📍 VM Details:"
+          echo "  Hostname: $VM_HOSTNAME"
+          echo "  Network IP: $VM_IP"
+          echo ""
+          echo "☸️  Stack Components:"
           echo "  ✓ KubeSentinel: Running in 'kubesentinel' namespace"
           echo "  ✓ Falco: Running in 'falco' namespace (eBPF + JSON output)"
           echo "  ✓ Victim App: Running in '${{ env.NAMESPACE }}' namespace"
           echo ""
-          echo "Access the Attack Simulator:"
-          echo "  1. On your Ubuntu VM, run:"
+          echo "🎯 Access the Attack Simulator:"
+          echo "  1. On your Ubuntu VM, open a terminal and run:"
           echo "     minikube tunnel"
-          echo "  2. Get your VM's network IP:"
-          echo "     hostname -I"
-          echo "  3. On your tablet, open:"
-          echo "     http://<vm-ip>"
+          echo "  2. On your tablet, open browser and navigate to:"
+          echo "     http://$VM_IP"
           echo ""
-          echo "Monitor Falco Events (on VM):"
-          echo "  FALCO_POD=\$(kubectl get pod -n falco -l app.kubernetes.io/name=falco,app.kubernetes.io/instance=falco -o jsonpath='{.items[0].metadata.name}')"
-          echo "  kubectl logs -f -n falco \$FALCO_POD"
+          echo "     OR (if LoadBalancer IP assigned):"
+          echo "     http://$EXTERNAL_IP"
           echo ""
-          echo "Stream to KubeSentinel Monitor (on VM):"
-          echo "  kubectl logs -f -n falco \$FALCO_POD | kubesentinel monitor-stdin"
+          echo "📡 Monitor Falco Events (on VM, new terminal):"
+          echo "  kubectl logs -f -n falco $FALCO_POD"
           echo ""
-          echo "Pipeline Summary:"
+          echo "🔬 Stream Falco to KubeSentinel Monitor (on VM, new terminal):"
+          echo "  kubectl logs -f -n falco $FALCO_POD | kubesentinel monitor-stdin"
+          echo ""
+          echo "📊 Pipeline Summary:"
           echo "  Image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           echo "  Namespace: ${{ env.NAMESPACE }}"
           echo "  Deployment: ${{ env.DEPLOYMENT_NAME }}"
           echo "  Commit: ${{ github.sha }}"
+          echo ""
+          echo "============================================================"
           echo ""
         shell: bash
 
