@@ -98,10 +98,19 @@ jobs:
           
           # Verify Falco pod is running
           echo "=== Verifying Falco Pod Status ==="
-          kubectl get pods -n falco -l app=falco
+          kubectl get pods -n falco -l app.kubernetes.io/name=falco
           
-          # Get Falco pod name and verify it's outputting JSON
-          FALCO_POD=$(kubectl get pod -n falco -l app=falco -o jsonpath='{.items[0].metadata.name}')
+          # Get Falco pod name and verify it's outputting JSON.
+          # Falco Helm chart uses app.kubernetes.io/* labels instead of app=falco.
+          FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco,app.kubernetes.io/instance=falco -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+
+          if [ -z "$FALCO_POD" ]; then
+            echo "❌ No Falco pod found after DaemonSet rollout"
+            kubectl get daemonset -n falco
+            kubectl get pods -n falco --show-labels
+            exit 1
+          fi
+
           echo "Falco pod: $FALCO_POD"
           
           # Give Falco a moment to start generating events
@@ -289,7 +298,7 @@ jobs:
           echo "     http://<vm-ip>"
           echo ""
           echo "Monitor Falco Events (on VM):"
-          echo "  FALCO_POD=\$(kubectl get pod -n falco -l app=falco -o jsonpath='{.items[0].metadata.name}')"
+          echo "  FALCO_POD=\$(kubectl get pod -n falco -l app.kubernetes.io/name=falco,app.kubernetes.io/instance=falco -o jsonpath='{.items[0].metadata.name}')"
           echo "  kubectl logs -f -n falco \$FALCO_POD"
           echo ""
           echo "Stream to KubeSentinel Monitor (on VM):"
