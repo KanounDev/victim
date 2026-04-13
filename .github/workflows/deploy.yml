@@ -134,6 +134,8 @@ jobs:
         if: success()
         run: |
           echo "Running post-deployment health checks..."
+          kubectl wait --for=condition=ready pod -l app=${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --timeout=90s
+
           POD_NAME=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.DEPLOYMENT_NAME }} -o jsonpath='{.items[0].metadata.name}')
           if [ -z "$POD_NAME" ]; then
             echo "❌ No pods found with label app=${{ env.DEPLOYMENT_NAME }}"
@@ -150,15 +152,26 @@ jobs:
             echo "❌ Pod is not in Running state"
             exit 1
           fi
-          
-          # Check the health endpoint using kubectl exec
+
+          # Check the health endpoint using Node (available in the app container) with retries
           echo "Checking /api/health endpoint..."
-          kubectl exec $POD_NAME -n ${{ env.NAMESPACE }} -- wget -q -O- http://localhost:3000/api/health | grep -q "ok"
-          if [ $? -eq 0 ]; then
-            echo "✓ Health check passed"
-          else
-            echo "⚠ Health check endpoint not responding (continue for demo purposes)"
+          HEALTH_OK=false
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "Health check attempt $i/10"
+            if kubectl exec $POD_NAME -n ${{ env.NAMESPACE }} -- node -e "const http=require('http');const req=http.get('http://localhost:3000/api/health',res=>{process.exit(res.statusCode===200?0:1)});req.on('error',()=>process.exit(1));"; then
+              HEALTH_OK=true
+              break
+            fi
+            sleep 3
+          done
+
+          if [ "$HEALTH_OK" != "true" ]; then
+            echo "❌ Health check failed after retries. Recent pod logs:"
+            kubectl logs $POD_NAME -n ${{ env.NAMESPACE }} --tail=40 || true
+            exit 1
           fi
+
+          echo "✓ Health check passed"
         shell: bash
         continue-on-error: false
 
