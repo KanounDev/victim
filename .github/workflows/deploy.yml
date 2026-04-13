@@ -24,12 +24,6 @@ jobs:
           echo "NAMESPACE=demo-app" >> $GITHUB_ENV
           echo "DEPLOYMENT_NAME=victim-app" >> $GITHUB_ENV
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
-          docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.IMAGE_NAME }}:latest
-        shell: bash
-
       - name: Clean up previous images
         run: |
           echo "Removing previous victim-app images and stale Minikube temp files..."
@@ -39,6 +33,12 @@ jobs:
           minikube image rm ${{ env.IMAGE_NAME }}:latest || true
           rm -f /tmp/minikube_image_*.log || true
           docker system prune -af || true
+        shell: bash
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.IMAGE_NAME }}:latest
         shell: bash
 
       - name: Load image into Minikube
