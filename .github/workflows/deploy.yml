@@ -30,6 +30,17 @@ jobs:
           docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.IMAGE_NAME }}:latest
         shell: bash
 
+      - name: Clean up previous images
+        run: |
+          echo "Removing previous victim-app images and stale Minikube temp files..."
+          docker image rm -f ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} || true
+          docker image rm -f ${{ env.IMAGE_NAME }}:latest || true
+          minikube image rm ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} || true
+          minikube image rm ${{ env.IMAGE_NAME }}:latest || true
+          rm -f /tmp/minikube_image_*.log || true
+          docker system prune -af || true
+        shell: bash
+
       - name: Load image into Minikube
         run: |
           echo "Loading Docker image into Minikube..."
