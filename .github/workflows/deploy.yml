@@ -23,6 +23,7 @@ jobs:
           echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
           echo "NAMESPACE=demo-app" >> $GITHUB_ENV
           echo "DEPLOYMENT_NAME=victim-app" >> $GITHUB_ENV
+        shell: bash
 
       - name: Clean up and Start Minikube
         run: |
@@ -59,6 +60,61 @@ jobs:
           # Set the Minikube context for kubectl
           kubectl config use-context minikube
           echo "✓ Minikube context configured"
+        shell: bash
+
+      - name: Install and Configure Falco
+        run: |
+          echo "=== Installing Falco via Helm ==="
+          
+          # Add Falco Helm repo
+          helm repo add falcosecurity https://falcosecurity.github.io/charts
+          helm repo update
+          
+          # Create Falco namespace
+          kubectl create namespace falco --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Install Falco with minimal inline configuration (no YAML file issues)
+          # Key flags:
+          #   - ebpf.enabled=true: Use eBPF probe instead of kernel module
+          #   - falco.grpc.enabled=true: Enable gRPC output
+          #   - falco.grpcOutput.enabled=true: Enable gRPC output
+          #   - json=true: Output JSON format
+          #   - stdout: Output to stdout (for kubectl logs)
+          helm install falco falcosecurity/falco \
+            --namespace falco \
+            --set ebpf.enabled=true \
+            --set falco.grpc.enabled=true \
+            --set falco.grpcOutput.enabled=true \
+            --set falco.jsonOutput=true \
+            --set falco.stdoutOutput.enabled=true \
+            --wait \
+            --timeout=5m
+          
+          echo "✓ Falco Helm install completed"
+          
+          # Wait for Falco DaemonSet to be ready
+          echo "=== Waiting for Falco DaemonSet ==="
+          kubectl rollout status daemonset/falco -n falco --timeout=3m
+          
+          # Verify Falco pod is running
+          echo "=== Verifying Falco Pod Status ==="
+          kubectl get pods -n falco -l app=falco
+          
+          # Get Falco pod name and verify it's outputting JSON
+          FALCO_POD=$(kubectl get pod -n falco -l app=falco -o jsonpath='{.items[0].metadata.name}')
+          echo "Falco pod: $FALCO_POD"
+          
+          # Give Falco a moment to start generating events
+          sleep 5
+          
+          # Check for JSON output in logs
+          echo "=== Checking Falco JSON Output ==="
+          if kubectl logs -n falco $FALCO_POD --tail=10 | grep -q '"time"'; then
+            echo "✓ Falco is outputting JSON events successfully"
+          else
+            echo "⚠️  Falco logs (first 20 lines):"
+            kubectl logs -n falco $FALCO_POD --tail=20 || true
+          fi
         shell: bash
 
       - name: Run KubeSentinel Static Scan
@@ -191,6 +247,61 @@ jobs:
           echo "✓ Health check passed"
         shell: bash
         continue-on-error: false
+
+      - name: Verify LoadBalancer Service
+        if: success()
+        run: |
+          echo "=== Checking LoadBalancer Service ==="
+          kubectl get svc -n ${{ env.NAMESPACE }} victim-app-lb
+          
+          # Get the external IP
+          EXTERNAL_IP=$(kubectl get svc -n ${{ env.NAMESPACE }} victim-app-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          
+          if [ -z "$EXTERNAL_IP" ]; then
+            echo "⚠️  LoadBalancer external IP not yet assigned. Note: You need to run 'minikube tunnel' on the VM to expose it."
+            echo "    On your VM, run: minikube tunnel"
+            echo "    Then check: kubectl get svc -n ${{ env.NAMESPACE }} victim-app-lb"
+          else
+            echo "✓ LoadBalancer external IP: $EXTERNAL_IP"
+            echo "Access victim app from tablet at: http://$EXTERNAL_IP"
+          fi
+        shell: bash
+
+      - name: Display Access Instructions
+        if: success()
+        run: |
+          echo ""
+          echo "============================================================"
+          echo "      KubeSentinel Demo Setup Complete"
+          echo "============================================================"
+          echo ""
+          echo "Stack Components:"
+          echo "  ✓ KubeSentinel: Running in 'kubesentinel' namespace"
+          echo "  ✓ Falco: Running in 'falco' namespace (eBPF + JSON output)"
+          echo "  ✓ Victim App: Running in '${{ env.NAMESPACE }}' namespace"
+          echo ""
+          echo "Access the Attack Simulator:"
+          echo "  1. On your Ubuntu VM, run:"
+          echo "     minikube tunnel"
+          echo "  2. Get your VM's network IP:"
+          echo "     hostname -I"
+          echo "  3. On your tablet, open:"
+          echo "     http://<vm-ip>"
+          echo ""
+          echo "Monitor Falco Events (on VM):"
+          echo "  FALCO_POD=\$(kubectl get pod -n falco -l app=falco -o jsonpath='{.items[0].metadata.name}')"
+          echo "  kubectl logs -f -n falco \$FALCO_POD"
+          echo ""
+          echo "Stream to KubeSentinel Monitor (on VM):"
+          echo "  kubectl logs -f -n falco \$FALCO_POD | kubesentinel monitor-stdin"
+          echo ""
+          echo "Pipeline Summary:"
+          echo "  Image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          echo "  Namespace: ${{ env.NAMESPACE }}"
+          echo "  Deployment: ${{ env.DEPLOYMENT_NAME }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo ""
+        shell: bash
 
       - name: Workflow summary
         if: always()
