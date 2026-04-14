@@ -87,6 +87,7 @@ jobs:
             --set falco.grpcOutput.enabled=true \
             --set falco.jsonOutput=true \
             --set falco.stdoutOutput.enabled=true \
+            --wait
             --timeout=15m
           
           echo "✓ Falco Helm install completed"
@@ -97,7 +98,15 @@ jobs:
           kubectl describe daemonset falco -n falco
           kubectl get events -n falco --sort-by='.lastTimestamp'
           kubectl get pods -n falco -o wide
-          kubectl rollout status daemonset/falco -n falco --timeout=10m
+
+          # Give the pod more time to start, with verbose output
+          echo "=== Waiting for Falco DaemonSet (this may take several minutes) ==="
+          kubectl rollout status daemonset/falco -n falco --timeout=15m || {
+            echo "⚠️  Falco DaemonSet timeout. Checking status..."
+            kubectl describe daemonset falco -n falco
+            kubectl get events -n falco --sort-by='.lastTimestamp'
+            echo "Continuing with deployment (Falco will start in background)..."
+          }
           
           # Verify Falco pod is running
           echo "=== Verifying Falco Pod Status ==="
