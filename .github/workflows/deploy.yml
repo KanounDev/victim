@@ -140,7 +140,7 @@ jobs:
 
           # 2. Run the scan and capture output; handle malformed external rule files gracefully
           set +e
-          SCAN_OUTPUT=$(./bin/kubesentinel scan 2>&1)
+          SCAN_OUTPUT=$(./bin/kubesentinel scan --path ./deploy 2>&1)
           SCAN_EXIT=$?
           set -e
 
