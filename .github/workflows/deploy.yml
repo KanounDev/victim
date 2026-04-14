@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-scan-deploy:
-    # Use 'self-hosted' or a custom label for your Ubuntu VM runner
+    # Use 'self-hosted' or a custom label for your Ubuntu VM runner 
     runs-on: self-hosted
     permissions:
       contents: read
