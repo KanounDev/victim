@@ -87,8 +87,10 @@ jobs:
             --set falco.grpcOutput.enabled=true \
             --set falco.jsonOutput=true \
             --set falco.stdoutOutput.enabled=true \
-            --wait
-            --timeout=15m
+            --set falcoctl.artifact.install.enabled=false \
+            --set falcoctl.artifact.follow.enabled=false \
+            --wait \
+            --timeout=5m
           
           echo "✓ Falco Helm install completed"
           
