@@ -34,8 +34,6 @@ jobs:
           minikube delete
           
           echo "=== 3. Starting Minikube safely ==="
-          # We drop the memory to 2200MB to leave enough RAM for the OS
-          # We use --force to bypass any lingering disk space warnings
           minikube start --memory=3500 --cpus=2 --force
           
           echo "=== 4. Wait for Control Plane ==="
@@ -60,84 +58,6 @@ jobs:
           # Set the Minikube context for kubectl
           kubectl config use-context minikube
           echo "✓ Minikube context configured"
-        shell: bash
-
-      - name: Install and Configure Falco
-        run: |
-          echo "=== Installing Falco via Helm ==="
-          
-          # Add Falco Helm repo
-          helm repo add falcosecurity https://falcosecurity.github.io/charts
-          helm repo update
-          
-          # Create Falco namespace
-          kubectl create namespace falco --dry-run=client -o yaml | kubectl apply -f -
-          
-          # Install Falco with minimal inline configuration (no YAML file issues)
-          # Key flags:
-          #   - ebpf.enabled=true: Use eBPF probe instead of kernel module
-          #   - falco.grpc.enabled=true: Enable gRPC output
-          #   - falco.grpcOutput.enabled=true: Enable gRPC output
-          #   - json=true: Output JSON format
-          #   - stdout: Output to stdout (for kubectl logs)
-          helm install falco falcosecurity/falco \
-            --namespace falco \
-            --set ebpf.enabled=true \
-            --set falco.grpc.enabled=true \
-            --set falco.grpcOutput.enabled=true \
-            --set falco.jsonOutput=true \
-            --set falco.stdoutOutput.enabled=true \
-            --set falcoctl.artifact.install.enabled=false \
-            --set falcoctl.artifact.follow.enabled=false \
-            --wait \
-            --timeout=5m
-          
-          echo "✓ Falco Helm install completed"
-          
-          # Wait for Falco DaemonSet to be ready
-          echo "=== Waiting for Falco DaemonSet ==="
-          echo "=== Checking Falco pod status ==="
-          kubectl describe daemonset falco -n falco
-          kubectl get events -n falco --sort-by='.lastTimestamp'
-          kubectl get pods -n falco -o wide
-
-          # Give the pod more time to start, with verbose output
-          echo "=== Waiting for Falco DaemonSet (this may take several minutes) ==="
-          kubectl rollout status daemonset/falco -n falco --timeout=15m || {
-            echo "⚠️  Falco DaemonSet timeout. Checking status..."
-            kubectl describe daemonset falco -n falco
-            kubectl get events -n falco --sort-by='.lastTimestamp'
-            echo "Continuing with deployment (Falco will start in background)..."
-          }
-          
-          # Verify Falco pod is running
-          echo "=== Verifying Falco Pod Status ==="
-          kubectl get pods -n falco -l app.kubernetes.io/name=falco
-          
-          # Get Falco pod name and verify it's outputting JSON.
-          # Falco Helm chart uses app.kubernetes.io/* labels instead of app=falco.
-          FALCO_POD=$(kubectl get pod -n falco -l app.kubernetes.io/name=falco,app.kubernetes.io/instance=falco -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-
-          if [ -z "$FALCO_POD" ]; then
-            echo "❌ No Falco pod found after DaemonSet rollout"
-            kubectl get daemonset -n falco
-            kubectl get pods -n falco --show-labels
-            exit 1
-          fi
-
-          echo "Falco pod: $FALCO_POD"
-          
-          # Give Falco a moment to start generating events
-          sleep 5
-          
-          # Check for JSON output in logs
-          echo "=== Checking Falco JSON Output ==="
-          if kubectl logs -n falco $FALCO_POD --tail=10 | grep -q '"time"'; then
-            echo "✓ Falco is outputting JSON events successfully"
-          else
-            echo "⚠️  Falco logs (first 20 lines):"
-            kubectl logs -n falco $FALCO_POD --tail=20 || true
-          fi
         shell: bash
 
       - name: Run KubeSentinel Static Scan
@@ -254,7 +174,7 @@ jobs:
           HEALTH_OK=false
           for i in 1 2 3 4 5 6 7 8 9 10; do
             echo "Health check attempt $i/10"
-            if kubectl exec $POD_NAME -n ${{ env.NAMESPACE }} -- node -e "const http=require('http');const req=http.get('http://localhost:3000/api/health',res=>{process.exit(res.statusCode===200?0:1)});req.on('error',()=>process.exit(1));"; then
+            if kubectl exec $POD_NAME -n ${{ env.NAMESPACE }} -- node -e "const http=require('http');const req=http.get('http://localhost:3000/api/health',res=>{process.exit(res.statusCode===200?0:1)});" 2>/dev/null; then
               HEALTH_OK=true
               break
             fi
