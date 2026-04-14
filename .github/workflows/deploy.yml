@@ -133,7 +133,7 @@ jobs:
       - name: Run KubeSentinel Static Scan
         run: |
           echo "Running KubeSentinel security scan on Kubernetes manifests..."
-
+          git config --global --add safe.directory /mnt/c/Users/khale/Documents/Kubesentinel/kubesentinel
           # Refresh KubeSentinel rules
           cd /mnt/c/Users/khale/Documents/Kubesentinel/kubesentinel
           git pull origin main
